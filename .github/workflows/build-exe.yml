@@ -1,0 +1,68 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: {}
+
+jobs:
+  build-pyinstaller:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install pyinstaller
+
+      - name: Build EXE
+        run: pyinstaller --onedir --noupx --clean --name compare_csv --version-file version_info.txt compare_csv.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: compare_csv-pyinstaller-windows
+          path: dist/compare_csv
+
+  build-nuitka:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install nuitka
+
+      - name: Build EXE
+        run: >
+          python -m nuitka
+          --standalone
+          --assume-yes-for-downloads
+          --windows-console-mode=force
+          --output-dir=dist
+          --output-filename=compare_csv.exe
+          --product-name="CSV 比較工具"
+          --file-description="CSV 比較工具"
+          --file-version=1.0.0.0
+          --product-version=1.0.0.0
+          compare_csv.py
+
+      - name: Rename output folder
+        shell: pwsh
+        run: Rename-Item -Path dist/compare_csv.dist -NewName compare_csv
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: compare_csv-nuitka-windows
+          path: dist/compare_csv
