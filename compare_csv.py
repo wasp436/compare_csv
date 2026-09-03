@@ -25,80 +25,6 @@ def format_row(row):
     return ",".join(row)
 
 
-def resolve_key_index(header, key):
-    if key in header:
-        return header.index(key)
-    try:
-        idx = int(key)
-    except ValueError:
-        raise ValueError(f"找不到欄位 {key!r}，且它也不是有效的欄位編號（從 0 開始）")
-    if idx < 0 or idx >= len(header):
-        raise ValueError(f"欄位編號 {idx} 超出範圍（標題列共有 {len(header)} 欄）")
-    return idx
-
-
-def index_by_key(data, key_index):
-    index = {}
-    for i, row in enumerate(data):
-        key = row[key_index] if key_index < len(row) else ""
-        index.setdefault(key, []).append((i, row))
-    return index
-
-
-def compare_by_key(rows_a, rows_b, key_index_a, key_index_b):
-    data_a, data_b = rows_a[1:], rows_b[1:]
-    idx_a = index_by_key(data_a, key_index_a)
-    idx_b = index_by_key(data_b, key_index_b)
-
-    ordered_keys = []
-    seen = set()
-    for row in data_a:
-        k = row[key_index_a] if key_index_a < len(row) else ""
-        if k not in seen:
-            seen.add(k)
-            ordered_keys.append(k)
-    for row in data_b:
-        k = row[key_index_b] if key_index_b < len(row) else ""
-        if k not in seen:
-            seen.add(k)
-            ordered_keys.append(k)
-
-    diffs = []
-    for k in ordered_keys:
-        a_entries = idx_a.get(k, [])
-        b_entries = idx_b.get(k, [])
-
-        for (i_a, row_a), (i_b, row_b) in zip(a_entries, b_entries):
-            max_len = max(len(row_a), len(row_b))
-            for c in range(max_len):
-                val_a = row_a[c] if c < len(row_a) else ""
-                val_b = row_b[c] if c < len(row_b) else ""
-                if val_a != val_b:
-                    diffs.append({
-                        "type": "modified",
-                        "cell": f"{col_letter(c)}{i_a + 2}",
-                        "csv1_row": i_a + 2,
-                        "csv2_row": i_b + 2,
-                        "csv1_value": val_a,
-                        "csv2_value": val_b,
-                    })
-
-        for i_a, row_a in a_entries[len(b_entries):]:
-            diffs.append({
-                "type": "removed",
-                "csv1_row": i_a + 2,
-                "csv1_value": format_row(row_a),
-            })
-        for i_b, row_b in b_entries[len(a_entries):]:
-            diffs.append({
-                "type": "added",
-                "csv2_row": i_b + 2,
-                "csv2_value": format_row(row_b),
-            })
-
-    return diffs
-
-
 def compare(rows_a, rows_b):
     a_key = [tuple(r) for r in rows_a]
     b_key = [tuple(r) for r in rows_b]
@@ -151,7 +77,6 @@ def main():
     parser.add_argument("--encoding", default="utf-8-sig", help="檔案編碼，例如 utf-8-sig 或 big5")
     parser.add_argument("--delimiter", default=",", help="欄位分隔符號，預設為逗號")
     parser.add_argument("--output", default="diff.csv", help="將結果輸出成 CSV 檔（預設 diff.csv，填空字串可關閉輸出）")
-    parser.add_argument("--key", default="ID", help="用來配對兩邊列的欄位名稱（或從 0 開始的欄位編號），預設 ID，填空字串可關閉並改用整列內容比對")
     args = parser.parse_args()
 
     try:
@@ -161,20 +86,7 @@ def main():
         print(f"讀取檔案時發生編碼錯誤：{e}\n請嘗試加上 --encoding big5 或 --encoding utf-8", file=sys.stderr)
         sys.exit(1)
 
-    if args.key:
-        try:
-            key_index_a = resolve_key_index(rows_a[0], args.key)
-        except ValueError as e:
-            print(f"{args.csv1}：{e}", file=sys.stderr)
-            sys.exit(1)
-        try:
-            key_index_b = resolve_key_index(rows_b[0], args.key)
-        except ValueError as e:
-            print(f"{args.csv2}：{e}", file=sys.stderr)
-            sys.exit(1)
-        diffs = compare_by_key(rows_a, rows_b, key_index_a, key_index_b)
-    else:
-        diffs = compare(rows_a, rows_b)
+    diffs = compare(rows_a, rows_b)
 
     print(f"{args.csv1}：共 {len(rows_a)} 列")
     print(f"{args.csv2}：共 {len(rows_b)} 列")
